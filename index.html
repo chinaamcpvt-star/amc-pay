@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMC-PAY | Elite Node</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Sora', sans-serif; background: #0B0118; color: #fff; overflow-x: hidden; }
+        .purple-glow { box-shadow: 0 0 30px rgba(157, 80, 187, 0.4); }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .hidden { display: none !important; }
+        .msg-bubble { max-width: 80%; padding: 10px 15px; border-radius: 18px; position: relative; margin-bottom: 8px; }
+        .admin-msg { background: #9D50BB; color: white; align-self: flex-end; border-bottom-right-radius: 4px; text-align: right; }
+        .user-msg { background: #2D0B5A; color: #ddd; align-self: flex-start; border-bottom-left-radius: 4px; }
+        img.chat-img { border-radius: 12px; margin-top: 5px; cursor: pointer; max-width: 200px; transition: 0.3s; }
+        img.chat-img:hover { transform: scale(1.05); }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen" class="fixed inset-0 z-[100] bg-[#0B0118] flex items-center justify-center p-6">
+        <div class="glass p-10 rounded-[3rem] w-full max-w-sm purple-glow border-purple-500/20 text-center">
+            <h1 class="text-4xl font-extrabold italic mb-10 tracking-tighter text-[#9D50BB]">AMC-PAY</h1>
+            <div class="space-y-5">
+                <input type="password" id="auth-code" placeholder="Access Code" class="w-full bg-black/40 p-4 rounded-2xl outline-none border border-white/5 focus:border-[#9D50BB] text-center text-xl">
+                <input type="text" id="user-id" placeholder="Account ID" class="w-full bg-black/40 p-4 rounded-2xl outline-none border border-white/5 focus:border-[#9D50BB] text-center uppercase">
+                <button onclick="handleLogin()" class="w-full bg-gradient-to-r from-[#9D50BB] to-[#E01E5A] py-4 rounded-full font-bold uppercase tracking-widest shadow-xl hover:opacity-90 transition">Unlock Vault</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="master-panel" class="hidden min-h-screen p-4 md:p-8">
+        <div class="max-w-6xl mx-auto grid lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-1 space-y-6">
+                <h2 class="text-2xl font-bold text-purple-400 mb-4">GHOST CONTROL</h2>
+                <div class="glass p-6 rounded-3xl border-purple-500/20">
+                    <div class="flex items-center gap-3 mb-6">
+                        <input type="text" id="target-id" oninput="verifySignal()" placeholder="Target ID..." class="flex-1 bg-black/50 p-3 rounded-xl border-none outline-none uppercase">
+                        <div id="status-orb" class="w-4 h-4 rounded-full bg-gray-600 transition-all"></div>
+                    </div>
+                    <input type="number" id="push-bal" placeholder="New Balance ($)" class="w-full bg-black/50 p-3 rounded-xl mb-4 outline-none">
+                    <button onclick="updateBalance()" class="w-full bg-purple-600 p-3 rounded-xl font-bold hover:bg-purple-500 transition">Update Ledger</button>
+                </div>
+                <button onclick="location.reload()" class="text-xs text-gray-500 uppercase tracking-widest">Logout Master</button>
+            </div>
+
+            <div class="lg:col-span-2 glass rounded-3xl p-6 flex flex-col h-[600px] border-purple-500/10">
+                <h3 class="font-bold mb-4">Active Session: <span id="master-chat-id" class="text-purple-400 italic">...</span></h3>
+                <div id="master-chat-box" class="flex-1 overflow-y-auto flex flex-col p-4"></div>
+                <div class="flex gap-2 pt-4 border-t border-white/5">
+                    <input type="file" id="master-file" class="hidden" onchange="uploadPhoto(true)">
+                    <button onclick="document.getElementById('master-file').click()" class="bg-gray-700 p-3 rounded-xl">📷</button>
+                    <input type="text" id="master-input" class="flex-1 bg-black/50 p-3 rounded-xl outline-none" placeholder="Reply to client...">
+                    <button onclick="sendText(true)" class="bg-blue-600 px-6 rounded-xl font-bold">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="user-panel" class="hidden min-h-screen p-4 pb-20">
+        <div class="max-w-md mx-auto">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-2">
+                   <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center text-[10px] font-bold">A</div>
+                   <span class="text-xs font-bold" id="user-display-id">...</span>
+                </div>
+                <button onclick="location.reload()" class="glass px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Logout</button>
+            </div>
+
+            <div class="text-center mb-6">
+                <p class="text-red-500 text-[10px] font-black tracking-widest animate-pulse mb-4 uppercase">The funds in your account can be withdrawn, once due!</p>
+                <div class="glass p-8 rounded-[3rem] purple-glow border-purple-500/20 relative">
+                    <p class="text-gray-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-2">Total Balance</p>
+                    <h2 id="display-balance" class="text-5xl font-extrabold tracking-tighter mb-8">$ 0.00</h2>
+                    <div class="flex gap-3">
+                        <button onclick="alert('System analyzing blockchain routes...')" class="flex-1 glass py-3 rounded-2xl font-bold text-xs uppercase">+ Add Funds</button>
+                        <button onclick="alert('You can\'t withdraw now, till available funds hit\'s system analysis')" class="flex-1 bg-white text-black py-3 rounded-2xl font-bold text-xs uppercase">↑ Withdraw</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass rounded-3xl p-4 h-52 mb-6">
+                <iframe src="https://widget.coinlib.io/widget?type=chart&theme=dark&coin_id=859&pref_coin_id=1505" width="100%" height="100%" frameborder="0"></iframe>
+            </div>
+
+            <div class="glass rounded-3xl p-5 flex flex-col h-[450px]">
+                <h3 class="text-[10px] font-bold text-purple-400 mb-4 tracking-widest uppercase">Encrypted Support Chat</h3>
+                <div id="user-chat-box" class="flex-1 overflow-y-auto flex flex-col p-2 text-sm"></div>
+                <div class="flex gap-2 pt-3 border-t border-white/5">
+                    <input type="file" id="user-file" class="hidden" onchange="uploadPhoto(false)">
+                    <button onclick="document.getElementById('user-file').click()" class="bg-white/10 p-2 rounded-xl">🖼️</button>
+                    <input type="text" id="user-input" class="flex-1 bg-black/40 p-2 rounded-xl outline-none" placeholder="Message Support...">
+                    <button onclick="sendText(false)" class="bg-[#9D50BB] px-4 rounded-xl font-bold">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // YOUR BRAIN (FIREBASE CONFIG) PLUGGED IN
+        const firebaseConfig = {
+            apiKey: "AIzaSyAdG0e-q1EMpcJUGN0asDOybTxG-ZzCgK0",
+            authDomain: "amc-pay-core.firebaseapp.com",
+            databaseURL: "https://amc-pay-core-default-rtdb.firebaseio.com",
+            projectId: "amc-pay-core",
+            storageBucket: "amc-pay-core.firebasestorage.app",
+            messagingSenderId: "180378064974",
+            appId: "1:180378064974:web:d9ed8c0294c7eac3c70b1f"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const storage = firebase.storage();
+        let currentUID = "";
+        let isAdminView = false;
+
+        function handleLogin() {
+            const code = document.getElementById('auth-code').value;
+            const uid = document.getElementById('user-id').value.trim().toUpperCase();
+            
+            if (code === "MASTER001") {
+                isAdminView = true;
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('master-panel').classList.remove('hidden');
+            } else if (code === "12345" && uid) {
+                currentUID = uid;
+                document.getElementById('user-display-id').innerText = uid;
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('user-panel').classList.remove('hidden');
+                
+                // Initialize Balance if new user
+                db.ref('ledger/' + currentUID).once('value', s => {
+                    if(!s.exists()) db.ref('ledger/' + currentUID).set({ balance: 0 });
+                });
+                
+                syncUser();
+            } else {
+                alert("Incorrect Credentials");
+            }
+        }
+
+        function syncUser() {
+            db.ref('ledger/' + currentUID).on('value', s => {
+                const data = s.val() || { balance: 0 };
+                document.getElementById('display-balance').innerText = "$" + data.balance.toLocaleString(undefined, {minimumFractionDigits: 2});
+            });
+            listenChat(currentUID, 'user-chat-box');
+        }
+
+        function verifySignal() {
+            const id = document.getElementById('target-id').value.toUpperCase();
+            if(!id) return;
+            db.ref('ledger/' + id).once('value', s => {
+                const orb = document.getElementById('status-orb');
+                if(s.exists()){
+                    orb.className = "w-4 h-4 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]";
+                    document.getElementById('master-chat-id').innerText = id;
+                    listenChat(id, 'master-chat-box');
+                } else {
+                    orb.className = "w-4 h-4 rounded-full bg-red-600";
+                }
+            });
+        }
+
+        function updateBalance() {
+            const id = document.getElementById('target-id').value.toUpperCase();
+            const amt = parseFloat(document.getElementById('push-bal').value);
+            if(id && !isNaN(amt)) {
+                db.ref('ledger/' + id).update({ balance: amt });
+                alert("Balance updated for " + id);
+            }
+        }
+
+        async function uploadPhoto(isAdm) {
+            const fileInput = isAdm ? document.getElementById('master-file') : document.getElementById('user-file');
+            const file = fileInput.files[0];
+            const id = isAdm ? document.getElementById('target-id').value.toUpperCase() : currentUID;
+            
+            if(!file || !id) return;
+
+            const ref = storage.ref(`chats/${id}/${Date.now()}_${file.name}`);
+            try {
+                await ref.put(file);
+                const url = await ref.getDownloadURL();
+                db.ref('chats/' + id).push({
+                    type: 'image',
+                    url: url,
+                    sender: isAdm ? 'ADMIN' : 'USER',
+                    time: Date.now()
+                });
+            } catch(e) { alert("Upload failed. Check Firebase Storage rules."); }
+        }
+
+        function sendText(isAdm) {
+            const id = isAdm ? document.getElementById('target-id').value.toUpperCase() : currentUID;
+            const input = isAdm ? document.getElementById('master-input') : document.getElementById('user-input');
+            if(!input.value || !id) return;
+
+            db.ref('chats/' + id).push({
+                type: 'text',
+                text: input.value,
+                sender: isAdm ? 'ADMIN' : 'USER',
+                time: Date.now()
+            });
+            input.value = "";
+        }
+
+        function listenChat(id, boxId) {
+            db.ref('chats/' + id).on('value', s => {
+                const box = document.getElementById(boxId);
+                box.innerHTML = "";
+                s.forEach(child => {
+                    const msg = child.val();
+                    const key = child.key;
+                    const div = document.createElement('div');
+                    div.className = `msg-bubble ${msg.sender === 'ADMIN' ? 'admin-msg' : 'user-msg'}`;
+                    
+                    let content = msg.type === 'text' ? `<p>${msg.text}</p>` : `<img src="${msg.url}" class="chat-img" onclick="window.open('${msg.url}')">`;
+                    
+                    if(isAdminView) {
+                        content += `<div class="text-[8px] mt-1 opacity-50 flex gap-2 justify-end">
+                            <span onclick="editMsg('${id}','${key}')" class="cursor-pointer hover:text-white underline">Edit</span>
+                            <span onclick="deleteMsg('${id}','${key}')" class="cursor-pointer hover:text-red-500 underline">Del</span>
+                        </div>`;
+                    }
+                    
+                    div.innerHTML = content;
+                    box.appendChild(div);
+                });
+                box.scrollTop = box.scrollHeight;
+            });
+        }
+
+        function deleteMsg(id, key) { if(confirm("Delete this message?")) db.ref(`chats/${id}/${key}`).remove(); }
+        function editMsg(id, key) {
+            const newTxt = prompt("Enter new text:");
+            if(newTxt) db.ref(`chats/${id}/${key}`).update({ text: newTxt, type: 'text' });
+        }
+    </script>
+</body>
+                      </html>
